@@ -118,11 +118,23 @@ export default function App() {
           Media Hub
         </div>
         <div style={{ marginLeft: 320 }}></div>
-        <div className="row gap-sm" style={{ alignItems: 'center' }}>
-          <span style={{ opacity: 0.7, marginRight: 8 }}>👤 {currentUsername}</span>
-          <button className="btn opacity-muted" onClick={() => setShowPasswordModal(true)} title="Cambiar contraseña">🔑</button>
-          <button className="btn opacity-muted" onClick={() => setTab('users')} title="Usuarios">👥</button>
-          <button className="btn" onClick={() => { logout(); setAuthed(false); }}>Logout</button>
+        <div className="row gap-sm topbar-right" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Library selector group - stays together */}
+          <div className="row gap-sm library-selector">
+            <select className="input" value={libId} onChange={e => { setPage(1); setLibId(Number(e.target.value)); }}>
+              {libs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <button className="btn" onClick={() => setShowLibraryModal(true)} title="Nueva biblioteca">+</button>
+          </div>
+          {/* Separator */}
+          <div className="topbar-separator" style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.2)', margin: '0 8px' }}></div>
+          {/* User section */}
+          <div className="row gap-sm user-section">
+            <span style={{ opacity: 0.7 }}>👤 {currentUsername}</span>
+            <button className="btn opacity-muted" onClick={() => setShowPasswordModal(true)} title="Cambiar contraseña">🔑</button>
+            <button className="btn opacity-muted" onClick={() => setTab('users')} title="Usuarios">👥</button>
+            <button className="btn" onClick={() => { logout(); setAuthed(false); }}>Logout</button>
+          </div>
         </div>
       </div>
 
@@ -137,10 +149,6 @@ export default function App() {
           </div>
           {tab === 'library' && (
             <div className="row">
-              <select className="input" value={libId} onChange={e => { setPage(1); setLibId(Number(e.target.value)); }}>
-                {libs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-              <button className="btn" onClick={() => setShowLibraryModal(true)} title="Nueva biblioteca">+</button>
               <select className="input" value={kind} onChange={e => { setPage(1); setKind(e.target.value); }}>
                 <option value="">All</option>
                 <option value="video">Video</option>
@@ -156,7 +164,7 @@ export default function App() {
       </div>
 
       {tab === 'home' ? (
-        <HomeView onOpen={(item) => { recordView(item.id); setOpen(item); }} favorites={favorites} setFavorites={setFavorites} refreshKey={homeRefreshKey} />
+        <HomeView onOpen={(item) => { recordView(item.id); setOpen(item); }} favorites={favorites} setFavorites={setFavorites} refreshKey={homeRefreshKey} libraryId={libId} />
       ) : tab === 'library' ? (
         <>
           <div className="muted mb-sm">

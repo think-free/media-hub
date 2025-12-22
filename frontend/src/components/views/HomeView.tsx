@@ -7,9 +7,10 @@ export interface HomeViewProps {
     favorites: Set<number>;
     setFavorites: (s: Set<number>) => void;
     refreshKey: number;
+    libraryId?: number;
 }
 
-export function HomeView({ onOpen, favorites, setFavorites, refreshKey }: HomeViewProps) {
+export function HomeView({ onOpen, favorites, setFavorites, refreshKey, libraryId }: HomeViewProps) {
     const [recentItems, setRecentItems] = useState<MediaItem[]>([]);
     const [historyItems, setHistoryItems] = useState<MediaItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -19,8 +20,8 @@ export function HomeView({ onOpen, favorites, setFavorites, refreshKey }: HomeVi
             setLoading(true);
             try {
                 const [recent, history] = await Promise.all([
-                    getRecentItems(12),
-                    getHistory(12)
+                    getRecentItems(12, libraryId),
+                    getHistory(12, libraryId)
                 ]);
                 setRecentItems(recent);
                 setHistoryItems(history);
@@ -30,7 +31,7 @@ export function HomeView({ onOpen, favorites, setFavorites, refreshKey }: HomeVi
                 setLoading(false);
             }
         })();
-    }, [refreshKey]);
+    }, [refreshKey, libraryId]);
 
     if (loading) {
         return <div className="muted">Cargando...</div>;

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
@@ -845,13 +846,34 @@ func (s *Server) handleRecentItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := s.DB.Query(r.Context(), `
-		SELECT id, library_id, path, rel_path, kind, size_bytes, duration_ms, width, height,
-		       thumb_path IS NOT NULL as has_thumb, created_at
-		FROM media_item
-		WHERE present = true
-		ORDER BY created_at DESC
-		LIMIT $1`, limit)
+	// Optional library filter
+	libraryIDStr := r.URL.Query().Get("library_id")
+	var libraryID *int64
+	if libraryIDStr != "" {
+		if id, err := strconv.ParseInt(libraryIDStr, 10, 64); err == nil {
+			libraryID = &id
+		}
+	}
+
+	var rows pgx.Rows
+	var err error
+	if libraryID != nil {
+		rows, err = s.DB.Query(r.Context(), `
+			SELECT id, library_id, path, rel_path, kind, size_bytes, duration_ms, width, height,
+			       thumb_path IS NOT NULL as has_thumb, created_at
+			FROM media_item
+			WHERE present = true AND library_id = $1
+			ORDER BY created_at DESC
+			LIMIT $2`, *libraryID, limit)
+	} else {
+		rows, err = s.DB.Query(r.Context(), `
+			SELECT id, library_id, path, rel_path, kind, size_bytes, duration_ms, width, height,
+			       thumb_path IS NOT NULL as has_thumb, created_at
+			FROM media_item
+			WHERE present = true
+			ORDER BY created_at DESC
+			LIMIT $1`, limit)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -896,15 +918,38 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := s.DB.Query(r.Context(), `
-		SELECT m.id, m.library_id, m.path, m.rel_path, m.kind, m.size_bytes,
-		       m.duration_ms, m.width, m.height,
-		       m.thumb_path IS NOT NULL as has_thumb, up.last_played_at
-		FROM user_playback up
-		JOIN media_item m ON m.id = up.item_id
-		WHERE up.user_id = $1 AND m.present = true
-		ORDER BY up.last_played_at DESC
-		LIMIT $2`, userID, limit)
+	// Optional library filter
+	libraryIDStr := r.URL.Query().Get("library_id")
+	var libraryID *int64
+	if libraryIDStr != "" {
+		if id, err := strconv.ParseInt(libraryIDStr, 10, 64); err == nil {
+			libraryID = &id
+		}
+	}
+
+	var rows pgx.Rows
+	var err error
+	if libraryID != nil {
+		rows, err = s.DB.Query(r.Context(), `
+			SELECT m.id, m.library_id, m.path, m.rel_path, m.kind, m.size_bytes,
+			       m.duration_ms, m.width, m.height,
+			       m.thumb_path IS NOT NULL as has_thumb, up.last_played_at
+			FROM user_playback up
+			JOIN media_item m ON m.id = up.item_id
+			WHERE up.user_id = $1 AND m.present = true AND m.library_id = $2
+			ORDER BY up.last_played_at DESC
+			LIMIT $3`, userID, *libraryID, limit)
+	} else {
+		rows, err = s.DB.Query(r.Context(), `
+			SELECT m.id, m.library_id, m.path, m.rel_path, m.kind, m.size_bytes,
+			       m.duration_ms, m.width, m.height,
+			       m.thumb_path IS NOT NULL as has_thumb, up.last_played_at
+			FROM user_playback up
+			JOIN media_item m ON m.id = up.item_id
+			WHERE up.user_id = $1 AND m.present = true
+			ORDER BY up.last_played_at DESC
+			LIMIT $2`, userID, limit)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

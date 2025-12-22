@@ -179,13 +179,19 @@ export async function getCurrentUser() {
 }
 
 // Home dashboard
-export async function getRecentItems(limit = 20) {
-  const res = await apiFetch(`/api/recent?limit=${limit}`);
+export async function getRecentItems(limit = 20, libraryId?: number) {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  if (libraryId) params.set('library_id', String(libraryId));
+  const res = await apiFetch(`/api/recent?${params.toString()}`);
   return res.json() as Promise<MediaItem[]>;
 }
 
-export async function getHistory(limit = 20) {
-  const res = await apiFetch(`/api/history?limit=${limit}`);
+export async function getHistory(limit = 20, libraryId?: number) {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  if (libraryId) params.set('library_id', String(libraryId));
+  const res = await apiFetch(`/api/history?${params.toString()}`);
   return res.json() as Promise<MediaItem[]>;
 }
 

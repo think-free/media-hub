@@ -365,12 +365,22 @@ a {
 
 /* ===== MOBILE RESPONSIVE STYLES ===== */
 @media (max-width: 768px) {
+
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body {
     font-size: 16px;
   }
 
   .container {
     padding: 12px;
+    max-width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
   }
 
   .glass {
@@ -389,6 +399,7 @@ a {
     font-size: 14px;
     border-radius: 10px;
     width: 100%;
+    box-sizing: border-box;
   }
 
   .row {
@@ -432,6 +443,9 @@ a {
     padding: 12px;
     margin-bottom: 12px;
     font-size: 16px;
+    overflow-x: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   /* Hide large logo on mobile, show text only */
@@ -449,6 +463,45 @@ a {
 
   .topbar>div:nth-child(3) {
     display: none;
+  }
+
+  /* Topbar right section - mobile layout */
+  .topbar-right {
+    width: 100%;
+    max-width: 100%;
+    justify-content: center;
+    overflow-x: hidden;
+  }
+
+  /* Library selector stays on same row - FORCE IT */
+  .library-selector {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+  }
+
+  .library-selector .input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .library-selector .btn {
+    flex-shrink: 0;
+  }
+
+  /* Hide separator on mobile */
+  .topbar-separator {
+    display: none;
+  }
+
+  /* User section - align with library selector */
+  .user-section {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
   }
 
   /* Toolbar mobile */
