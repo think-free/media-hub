@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: mediahub
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d mediahub" ]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/mediahub?sslmode=disable
+      JWT_SECRET: dev-secret-change-me
+      THUMB_DIR: /data/thumbs
+      MEDIA_EXT_PHOTO: jpg,jpeg,png,gif,webp,heic,heif,tif,tiff,bmp,avif
+      MEDIA_EXT_AUDIO: mp3,m4a,aac,flac,ogg,opus,wav,aiff,alac
+      MEDIA_EXT_VIDEO: mp4,mkv,avi,mov,m4v,webm,ts,m2ts,mpg,mpeg,3gp
+      INDEX_OTHER: "false"
+    ports: [ "8080:8080" ]
+    volumes:
+      - mediahub_data:/data
+      - /Users/christophe:/media/disk1:ro
+      - "/Users/christophe/Downloads:/media/disk2:ro"
+
+    depends_on: [ db ]
+
+#  frontend:
+#    build: ./frontend
+#    environment:
+#      VITE_API_BASE: http://localhost:8080
+#    ports: [ "5173:5173" ]
+#    depends_on: [ backend ]
+
+volumes:
+  pgdata:
+  mediahub_data:
