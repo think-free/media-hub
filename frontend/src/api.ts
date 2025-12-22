@@ -1,4 +1,6 @@
-const API = (import.meta as any).env.VITE_API_BASE ?? "http://localhost:8080";
+// Use same hostname as the current page but with backend port 8080
+const API = (import.meta as any).env.VITE_API_BASE ??
+  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8080` : "http://localhost:8080");
 
 export type LoginResponse = { token: string };
 

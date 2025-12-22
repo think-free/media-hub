@@ -362,3 +362,191 @@ a {
   gap: 12px;
   margin-top: 24px;
 }
+
+/* ===== MOBILE RESPONSIVE STYLES ===== */
+@media (max-width: 768px) {
+  body {
+    font-size: 16px;
+  }
+
+  .container {
+    padding: 12px;
+  }
+
+  .glass {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+
+  .input {
+    padding: 10px 14px;
+    font-size: 14px;
+    border-radius: 10px;
+    width: 100%;
+  }
+
+  .row {
+    gap: 8px;
+  }
+
+  .gap-sm {
+    gap: 6px;
+  }
+
+  .title {
+    font-size: 16px;
+  }
+
+  .muted {
+    font-size: 13px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .thumb {
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+
+  .card-title {
+    font-size: 13px;
+  }
+
+  /* Topbar mobile */
+  .topbar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    font-size: 16px;
+  }
+
+  /* Hide large logo on mobile, show text only */
+  .topbar img {
+    height: 60px !important;
+    position: static !important;
+    transform: none !important;
+  }
+
+  .topbar>div:nth-child(2) {
+    position: static !important;
+    transform: none !important;
+    font-size: 20px !important;
+  }
+
+  .topbar>div:nth-child(3) {
+    display: none;
+  }
+
+  /* Toolbar mobile */
+  .toolbar {
+    margin-bottom: 12px;
+  }
+
+  .toolbar .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar select,
+  .toolbar input {
+    width: 100%;
+  }
+
+  /* Modal mobile - FULLSCREEN */
+  .modal-overlay {
+    padding: 0;
+  }
+
+  .modal-content {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    padding: 0;
+    border-radius: 0;
+    overflow-y: auto;
+  }
+
+  /* Header row with Cerrar button - needs padding */
+  .modal-content>.row:first-child {
+    padding: 12px 12px 8px 12px;
+  }
+
+  /* Video fills full width, no padding */
+  .media-display {
+    width: 100%;
+    max-height: 55vh;
+    border-radius: 0;
+    object-fit: contain;
+    display: block;
+  }
+
+  /* Content below video - needs padding */
+  .modal-content>p,
+  .modal-content>.mt-md {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  /* Login panel mobile */
+  .login-panel {
+    margin: 20px auto;
+    max-width: 100%;
+  }
+
+  .login-panel .row {
+    flex-direction: column;
+  }
+
+  .login-panel .input {
+    width: 100%;
+  }
+
+  /* Badge mobile */
+  .badge {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  /* Pagination mobile */
+  .pagination {
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  /* Margins mobile */
+  .mb-md {
+    margin-bottom: 16px;
+  }
+
+  .mt-md {
+    margin-top: 16px;
+  }
+
+  .mb-sm {
+    margin-bottom: 8px;
+  }
+
+  .mt-sm {
+    margin-top: 8px;
+  }
+
+  /* View sections */
+  h3 {
+    font-size: 18px !important;
+    margin-bottom: 10px !important;
+  }
+}
