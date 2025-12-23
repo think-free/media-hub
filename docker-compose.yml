@@ -1,15 +1,14 @@
+version: "2.4"
+
 services:
   db:
-    image: postgres:16
+    image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
       POSTGRES_DB: mediahub
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d mediahub" ]
-      interval: 2s
-      timeout: 5s
-      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 
   backend:
     build: ./backend
@@ -26,8 +25,9 @@ services:
     volumes:
       - mediahub_data:/data
       - /Users/christophe:/media/disk1:ro
-      - "/Users/christophe/Downloads:/media/disk2:ro"
-    depends_on: [ db ]
+      - /Users/christophe/Downloads:/media/disk2:ro
+    depends_on:
+      - db
 
   frontend:
     build:
@@ -36,7 +36,8 @@ services:
         VITE_API_BASE: http://localhost:8080
     ports:
       - "5173:80"
-    depends_on: [ backend ]
+    depends_on:
+      - backend
 
 volumes:
   pgdata:
