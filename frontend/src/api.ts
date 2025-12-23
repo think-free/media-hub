@@ -1,6 +1,21 @@
-// Use same hostname as the current page but with backend port 8080
-const API = (import.meta as any).env.VITE_API_BASE ??
-  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8080` : "http://localhost:8080");
+// API base URL configuration:
+// - VITE_API_BASE takes priority if set at build time (e.g., "http://myserver:8099")
+// - Otherwise uses same origin as the page (works when behind reverse proxy or same port)
+const getApiBase = () => {
+  const env = (import.meta as any).env;
+
+  // Explicit config takes priority
+  if (env?.VITE_API_BASE) return env.VITE_API_BASE;
+
+  // In browser: use same origin (protocol + hostname + port)
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  // SSR fallback
+  return "http://localhost:8080";
+};
+const API = getApiBase();
 
 export type LoginResponse = { token: string };
 

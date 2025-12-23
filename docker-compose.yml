@@ -21,20 +21,22 @@ services:
       MEDIA_EXT_AUDIO: mp3,m4a,aac,flac,ogg,opus,wav,aiff,alac
       MEDIA_EXT_VIDEO: mp4,mkv,avi,mov,m4v,webm,ts,m2ts,mpg,mpeg,3gp
       INDEX_OTHER: "false"
-    ports: [ "8080:8080" ]
+    ports:
+      - "8080:8080"
     volumes:
       - mediahub_data:/data
       - /Users/christophe:/media/disk1:ro
       - "/Users/christophe/Downloads:/media/disk2:ro"
-
     depends_on: [ db ]
 
-#  frontend:
-#    build: ./frontend
-#    environment:
-#      VITE_API_BASE: http://localhost:8080
-#    ports: [ "5173:5173" ]
-#    depends_on: [ backend ]
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: http://localhost:8080
+    ports:
+      - "5173:80"
+    depends_on: [ backend ]
 
 volumes:
   pgdata:
