@@ -32,7 +32,6 @@ func main() {
 		log.Fatalf("migrate: %v", err)
 	}
 
-	// Default admin user (dev)
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
 	if err := d.EnsureDefaultAdmin(ctx, "admin", string(hash)); err != nil {
 		log.Fatalf("ensure admin: %v", err)
@@ -41,7 +40,6 @@ func main() {
 	scanner := scan.New(d.Pool, cfg)
 	streamer := stream.New(d.Pool)
 
-	// Start thumbnail worker in background
 	thumbWorker := worker.NewThumbWorker(d.Pool, cfg)
 	go thumbWorker.Run(ctx)
 
@@ -58,7 +56,6 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// ✅ CORS must run BEFORE auth middleware so OPTIONS preflight is handled.
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
@@ -79,7 +76,6 @@ func main() {
 		})
 	})
 
-	// ✅ Auth after CORS (AuthMiddleware already exempts /healthz and /api/auth/login)
 	r.Use(api.AuthMiddleware(cfg.JWTSecret))
 
 	r.Mount("/", srv.Routes())

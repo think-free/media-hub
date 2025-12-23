@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -171,14 +172,19 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "library_id required", 400)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
-	defer cancel()
-	err := s.Scanner.ScanLibrary(ctx, lid)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	writeJSON(w, 200, map[string]any{"ok": true})
+
+	// Run scan in background
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		if err := s.Scanner.ScanLibrary(ctx, lid); err != nil {
+			log.Printf("scan library %d error: %v", lid, err)
+		} else {
+			log.Printf("scan library %d completed", lid)
+		}
+	}()
+
+	writeJSON(w, 200, map[string]any{"started": true})
 }
 
 func (s *Server) handleItems(w http.ResponseWriter, r *http.Request) {
