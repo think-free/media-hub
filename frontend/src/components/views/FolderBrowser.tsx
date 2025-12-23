@@ -14,15 +14,24 @@ export interface FolderBrowserProps {
 export function FolderBrowser({ libraryId, path, setPath, onOpen, favorites, setFavorites }: FolderBrowserProps) {
     const [data, setData] = useState<{ folders: string[]; items: MediaItem[] }>({ folders: [], items: [] });
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!libraryId) return;
         setLoading(true);
+        setError(null);
         getFolders(libraryId, path)
             .then(setData)
-            .catch(console.error)
+            .catch(e => {
+                console.error(e);
+                setError(e.message || 'Error loading folders');
+            })
             .finally(() => setLoading(false));
     }, [libraryId, path]);
+
+    if (!libraryId) {
+        return <div className="muted">Selecciona una biblioteca primero</div>;
+    }
 
     const pathParts = path ? path.split('/') : [];
 
@@ -56,6 +65,7 @@ export function FolderBrowser({ libraryId, path, setPath, onOpen, favorites, set
             </div>
 
             {loading && <div className="muted">Cargando...</div>}
+            {error && <div className="muted" style={{ color: '#ff6b6b' }}>Error: {error}</div>}
 
             {/* Folders */}
             {data.folders.length > 0 && (

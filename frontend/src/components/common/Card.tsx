@@ -20,7 +20,7 @@ export function Card({ item, fav, onFav, onOpen }: CardProps) {
             </div>
             <div style={{ flexGrow: 1 }}></div>
             <p className="title card-title" style={{ margin: '8px 0 0 0' }}>
-                {item.rel_path}
+                {item.rel_path.split('/').pop()?.replace(/\.[^.]+$/, '') || item.rel_path}
             </p>
             <div className="row justify-between" style={{ marginTop: 4 }}>
                 <button className="btn" onClick={onFav} title="Favorito" style={{ padding: '4px 8px', fontSize: 14 }}>
