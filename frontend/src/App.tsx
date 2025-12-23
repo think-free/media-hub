@@ -26,9 +26,6 @@ function Login({ onDone }: { onDone: () => void }) {
           }}>Login</button>
           {err && <span className="muted">{err}</span>}
         </div>
-        <p className="muted mt-md mb-0">
-          Tema oscuro + glass básico (starter). Miniaturas/metadata están como placeholder.
-        </p>
       </div>
     </div>
   );
