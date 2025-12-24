@@ -598,79 +598,121 @@ func (s *Server) handleFolders(w http.ResponseWriter, r *http.Request) {
 		Items   []MediaItem `json:"items"`
 	}
 
-	// Get all rel_paths for this library, then filter in Go
-	rows, err := s.DB.Query(r.Context(), `
-		SELECT id, library_id, rel_path, path, kind, present, size_bytes, mtime, last_seen_at, coalesce(thumb_path,'')
-		FROM media_item
-		WHERE library_id = $1 AND present = true
-		ORDER BY rel_path ASC
-	`, lid)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	defer rows.Close()
-
-	folderSet := make(map[string]bool)
+	var folders []string
 	var items []MediaItem
 
-	for rows.Next() {
-		var it MediaItem
-		var mtime *time.Time
-		var thumb string
-		if err := rows.Scan(&it.ID, &it.LibraryID, &it.RelPath, &it.Path, &it.Kind, &it.Present, &it.SizeBytes, &mtime, &it.LastSeenAt, &thumb); err != nil {
-			continue
+	if path == "" {
+		// At root level: get unique first-level folder names
+		// Extract folder name from rel_path where rel_path contains '/'
+		folderRows, err := s.DB.Query(r.Context(), `
+			SELECT DISTINCT split_part(rel_path, '/', 1) as folder
+			FROM media_item
+			WHERE library_id = $1 AND present = true AND rel_path LIKE '%/%'
+			ORDER BY folder ASC
+			LIMIT 1000
+		`, lid)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
 		}
-		it.MTime = mtime
-		if thumb != "" {
-			it.ThumbURL = fmt.Sprintf("/api/items/%d/thumb", it.ID)
+		for folderRows.Next() {
+			var folder string
+			if err := folderRows.Scan(&folder); err == nil && folder != "" {
+				folders = append(folders, folder)
+			}
 		}
+		folderRows.Close()
 
-		// Check if this item is under the current path
-		if path == "" {
-			// At root level
-			if strings.Contains(it.RelPath, "/") {
-				// Has subdirectory - extract first folder
-				parts := strings.SplitN(it.RelPath, "/", 2)
-				folderSet[parts[0]] = true
-			} else {
-				// File at root level
-				items = append(items, it)
+		// Get items at root level (no '/' in rel_path)
+		itemRows, err := s.DB.Query(r.Context(), `
+			SELECT id, library_id, rel_path, path, kind, present, size_bytes, mtime, last_seen_at, coalesce(thumb_path,'')
+			FROM media_item
+			WHERE library_id = $1 AND present = true AND rel_path NOT LIKE '%/%'
+			ORDER BY rel_path ASC
+			LIMIT 500
+		`, lid)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		defer itemRows.Close()
+		for itemRows.Next() {
+			var it MediaItem
+			var mtime *time.Time
+			var thumb string
+			if err := itemRows.Scan(&it.ID, &it.LibraryID, &it.RelPath, &it.Path, &it.Kind, &it.Present, &it.SizeBytes, &mtime, &it.LastSeenAt, &thumb); err != nil {
+				continue
 			}
-		} else {
-			// In a subfolder
-			prefix := path + "/"
-			if strings.HasPrefix(it.RelPath, prefix) {
-				rest := strings.TrimPrefix(it.RelPath, prefix)
-				if strings.Contains(rest, "/") {
-					// Has further subdirectory
-					parts := strings.SplitN(rest, "/", 2)
-					folderSet[parts[0]] = true
-				} else {
-					// File in this folder
-					items = append(items, it)
-				}
+			it.MTime = mtime
+			if thumb != "" {
+				it.ThumbURL = fmt.Sprintf("/api/items/%d/thumb", it.ID)
 			}
+			items = append(items, it)
+		}
+	} else {
+		// In a subfolder: get subfolders and items
+		prefix := path + "/"
+		prefixLen := len(prefix)
+
+		// Get unique subfolders at this level
+		// Find items that start with prefix and have another '/' after the prefix
+		folderRows, err := s.DB.Query(r.Context(), `
+			SELECT DISTINCT split_part(substring(rel_path from $2), '/', 1) as folder
+			FROM media_item
+			WHERE library_id = $1 AND present = true 
+			  AND rel_path LIKE $3
+			  AND substring(rel_path from $2) LIKE '%/%'
+			ORDER BY folder ASC
+			LIMIT 1000
+		`, lid, prefixLen+1, prefix+"%")
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		for folderRows.Next() {
+			var folder string
+			if err := folderRows.Scan(&folder); err == nil && folder != "" {
+				folders = append(folders, folder)
+			}
+		}
+		folderRows.Close()
+
+		// Get items directly in this folder (start with prefix, no more '/' after prefix)
+		itemRows, err := s.DB.Query(r.Context(), `
+			SELECT id, library_id, rel_path, path, kind, present, size_bytes, mtime, last_seen_at, coalesce(thumb_path,'')
+			FROM media_item
+			WHERE library_id = $1 AND present = true 
+			  AND rel_path LIKE $2
+			  AND substring(rel_path from $3) NOT LIKE '%/%'
+			ORDER BY rel_path ASC
+			LIMIT 500
+		`, lid, prefix+"%", prefixLen+1)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		defer itemRows.Close()
+		for itemRows.Next() {
+			var it MediaItem
+			var mtime *time.Time
+			var thumb string
+			if err := itemRows.Scan(&it.ID, &it.LibraryID, &it.RelPath, &it.Path, &it.Kind, &it.Present, &it.SizeBytes, &mtime, &it.LastSeenAt, &thumb); err != nil {
+				continue
+			}
+			it.MTime = mtime
+			if thumb != "" {
+				it.ThumbURL = fmt.Sprintf("/api/items/%d/thumb", it.ID)
+			}
+			items = append(items, it)
 		}
 	}
 
-	// Convert folder set to sorted slice
-	folders := make([]string, 0, len(folderSet))
-	for f := range folderSet {
-		folders = append(folders, f)
+	// Ensure we return empty arrays, not null
+	if folders == nil {
+		folders = []string{}
 	}
-	// Sort folders
-	for i := 0; i < len(folders); i++ {
-		for j := i + 1; j < len(folders); j++ {
-			if folders[i] > folders[j] {
-				folders[i], folders[j] = folders[j], folders[i]
-			}
-		}
-	}
-
-	// Limit items to 500
-	if len(items) > 500 {
-		items = items[:500]
+	if items == nil {
+		items = []MediaItem{}
 	}
 
 	writeJSON(w, 200, FoldersResponse{Folders: folders, Items: items})

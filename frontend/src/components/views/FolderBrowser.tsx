@@ -21,10 +21,21 @@ export function FolderBrowser({ libraryId, path, setPath, onOpen, favorites, set
         setLoading(true);
         setError(null);
         getFolders(libraryId, path)
-            .then(setData)
+            .then(res => {
+                // Validate response structure
+                if (res && typeof res === 'object') {
+                    setData({
+                        folders: Array.isArray(res.folders) ? res.folders : [],
+                        items: Array.isArray(res.items) ? res.items : []
+                    });
+                } else {
+                    setData({ folders: [], items: [] });
+                }
+            })
             .catch(e => {
                 console.error(e);
                 setError(e.message || 'Error loading folders');
+                setData({ folders: [], items: [] });
             })
             .finally(() => setLoading(false));
     }, [libraryId, path]);
