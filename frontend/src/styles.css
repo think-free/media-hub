@@ -197,6 +197,7 @@ a {
   font-size: 22px;
   outline: none;
   box-sizing: border-box;
+  height: 56px;
 }
 
 .grid {

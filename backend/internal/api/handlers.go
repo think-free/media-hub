@@ -72,6 +72,9 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/api/history", s.handleHistory)
 	r.Post("/api/history/{id}", s.handleRecordView)
 
+	// Search - returns items by filename regex and matching tags
+	r.Get("/api/search", s.handleSearch)
+
 	return r
 }
 
@@ -1009,4 +1012,147 @@ func (s *Server) handleRecordView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// handleSearch searches by pattern in filename and in tags
+// Returns two sections: items matching filename pattern, and items matching tag names
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		writeJSON(w, 200, map[string]any{
+			"by_filename": []MediaItem{},
+			"by_tag":      []MediaItem{},
+			"tags":        []map[string]any{},
+		})
+		return
+	}
+
+	// Optional library filter
+	lid, _ := strconv.ParseInt(r.URL.Query().Get("library_id"), 10, 64)
+	limit := 100
+
+	// Convert search pattern to ILIKE pattern
+	// User can use * as wildcard, we convert to %
+	pattern := strings.ReplaceAll(q, "*", "%")
+	if !strings.Contains(pattern, "%") {
+		pattern = "%" + pattern + "%"
+	}
+
+	type SearchResult struct {
+		ByFilename []MediaItem      `json:"by_filename"`
+		ByTag      []MediaItem      `json:"by_tag"`
+		Tags       []map[string]any `json:"tags"`
+	}
+	result := SearchResult{
+		ByFilename: []MediaItem{},
+		ByTag:      []MediaItem{},
+		Tags:       []map[string]any{},
+	}
+
+	// 1. Search by filename pattern (rel_path)
+	var filenameQuery string
+	var filenameArgs []any
+	if lid > 0 {
+		filenameQuery = `
+			SELECT id, library_id, rel_path, path, kind, present, size_bytes, mtime, last_seen_at, coalesce(thumb_path,'')
+			FROM media_item
+			WHERE present = true AND library_id = $1 AND rel_path ILIKE $2
+			ORDER BY rel_path ASC
+			LIMIT $3`
+		filenameArgs = []any{lid, pattern, limit}
+	} else {
+		filenameQuery = `
+			SELECT id, library_id, rel_path, path, kind, present, size_bytes, mtime, last_seen_at, coalesce(thumb_path,'')
+			FROM media_item
+			WHERE present = true AND rel_path ILIKE $1
+			ORDER BY rel_path ASC
+			LIMIT $2`
+		filenameArgs = []any{pattern, limit}
+	}
+
+	rows, err := s.DB.Query(r.Context(), filenameQuery, filenameArgs...)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	for rows.Next() {
+		var it MediaItem
+		var mtime *time.Time
+		var thumb string
+		if err := rows.Scan(&it.ID, &it.LibraryID, &it.RelPath, &it.Path, &it.Kind, &it.Present, &it.SizeBytes, &mtime, &it.LastSeenAt, &thumb); err != nil {
+			continue
+		}
+		it.MTime = mtime
+		if thumb != "" {
+			it.ThumbURL = fmt.Sprintf("/api/items/%d/thumb", it.ID)
+		}
+		result.ByFilename = append(result.ByFilename, it)
+	}
+	rows.Close()
+
+	// 2. Search tags by name pattern
+	tagRows, err := s.DB.Query(r.Context(), `
+		SELECT t.id, t.name, count(it.item_id) as c
+		FROM tag t
+		LEFT JOIN item_tag it ON it.tag_id = t.id
+		WHERE t.name ILIKE $1
+		GROUP BY t.id, t.name
+		ORDER BY c DESC, t.name ASC
+		LIMIT 50`, pattern)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	var matchingTagIDs []int64
+	for tagRows.Next() {
+		var id int64
+		var name string
+		var count int64
+		if err := tagRows.Scan(&id, &name, &count); err != nil {
+			continue
+		}
+		result.Tags = append(result.Tags, map[string]any{"id": id, "name": name, "count": count})
+		matchingTagIDs = append(matchingTagIDs, id)
+	}
+	tagRows.Close()
+
+	// 3. Get items from matching tags
+	if len(matchingTagIDs) > 0 {
+		// Build IN clause
+		placeholders := make([]string, len(matchingTagIDs))
+		tagArgs := make([]any, len(matchingTagIDs)+1)
+		for i, tid := range matchingTagIDs {
+			placeholders[i] = fmt.Sprintf("$%d", i+1)
+			tagArgs[i] = tid
+		}
+		tagArgs[len(matchingTagIDs)] = limit
+
+		itemsByTagQuery := fmt.Sprintf(`
+			SELECT DISTINCT mi.id, mi.library_id, mi.rel_path, mi.path, mi.kind, mi.present, mi.size_bytes, mi.mtime, mi.last_seen_at, coalesce(mi.thumb_path,'')
+			FROM item_tag it
+			JOIN media_item mi ON mi.id = it.item_id
+			WHERE it.tag_id IN (%s) AND mi.present = true
+			ORDER BY mi.rel_path ASC
+			LIMIT $%d`, strings.Join(placeholders, ","), len(matchingTagIDs)+1)
+
+		itemRows, err := s.DB.Query(r.Context(), itemsByTagQuery, tagArgs...)
+		if err == nil {
+			for itemRows.Next() {
+				var it MediaItem
+				var mtime *time.Time
+				var thumb string
+				if err := itemRows.Scan(&it.ID, &it.LibraryID, &it.RelPath, &it.Path, &it.Kind, &it.Present, &it.SizeBytes, &mtime, &it.LastSeenAt, &thumb); err != nil {
+					continue
+				}
+				it.MTime = mtime
+				if thumb != "" {
+					it.ThumbURL = fmt.Sprintf("/api/items/%d/thumb", it.ID)
+				}
+				result.ByTag = append(result.ByTag, it)
+			}
+			itemRows.Close()
+		}
+	}
+
+	writeJSON(w, 200, result)
 }

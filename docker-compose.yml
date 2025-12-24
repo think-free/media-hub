@@ -7,6 +7,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_DB: ${DB_NAME:-mediahub}
+    # Uncomment to access database from outside Docker (for imports, debugging):
+    # ports:
+    #   - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -27,6 +30,7 @@ services:
       # Add your media directories below (edit as needed):
       # - /path/to/media1:/media/disk1:ro
       # - /path/to/media2:/media/disk2:ro
+      - /Users/christophe/Downloads:/media/disk1:ro
     depends_on:
       - db
 

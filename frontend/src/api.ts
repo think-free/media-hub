@@ -213,3 +213,18 @@ export async function getHistory(limit = 20, libraryId?: number) {
 export async function recordView(itemId: number) {
   await apiFetch(`/api/history/${itemId}`, { method: "POST" });
 }
+
+// Search API - returns items by filename pattern and by tag
+export type SearchResult = {
+  by_filename: MediaItem[];
+  by_tag: MediaItem[];
+  tags: { id: number; name: string; count: number }[];
+};
+
+export async function search(q: string, libraryId?: number): Promise<SearchResult> {
+  const params = new URLSearchParams();
+  params.set('q', q);
+  if (libraryId) params.set('library_id', String(libraryId));
+  const res = await apiFetch(`/api/search?${params.toString()}`);
+  return res.json() as Promise<SearchResult>;
+}

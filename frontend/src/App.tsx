@@ -4,7 +4,7 @@ import { getFavorites, getItems, getLibraries, getCurrentUser, login, logout, re
 // Components
 import { Card } from './components/common';
 import { PlayerModal, LibraryModal, ChangePasswordModal } from './components/modals';
-import { HomeView, FavoritesView, TagsView, FolderBrowser, UsersView } from './components/views';
+import { HomeView, FavoritesView, TagsView, FolderBrowser, UsersView, SearchView } from './components/views';
 
 function Login({ onDone }: { onDone: () => void }) {
   const [u, setU] = useState('admin');
@@ -42,7 +42,8 @@ export default function App() {
   const [total, setTotal] = useState<number>(0);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [open, setOpen] = useState<MediaItem | null>(null);
-  const [tab, setTab] = useState<'home' | 'library' | 'favorites' | 'folders' | 'tags' | 'users'>('home');
+  const [tab, setTab] = useState<'home' | 'library' | 'favorites' | 'folders' | 'tags' | 'search' | 'users'>('home');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [folderPath, setFolderPath] = useState<string>('');
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
@@ -118,10 +119,11 @@ export default function App() {
         <div className="row gap-sm topbar-right" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Library selector group - stays together */}
           <div className="row gap-sm library-selector">
-            <select className="input" value={libId} onChange={e => { setPage(1); setLibId(Number(e.target.value)); }}>
+            <select className="input" style={{ minWidth: 150 }} value={libId} onChange={e => { setPage(1); setLibId(Number(e.target.value)); }}>
               {libs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
             <button className="btn" onClick={() => setShowLibraryModal(true)} title="Nueva biblioteca">+</button>
+            <button className="btn" onClick={async () => { if (!libId) return; await scanLibrary(libId); alert('Scan iniciado en segundo plano'); }} title="Escanear biblioteca">🔃</button>
           </div>
           {/* Separator */}
           <div className="topbar-separator" style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.2)', margin: '0 8px' }}></div>
@@ -144,8 +146,16 @@ export default function App() {
             <button className={`btn ${tab === 'folders' ? '' : 'opacity-muted'}`} onClick={() => { setTab('folders'); setFolderPath(''); }}>Carpetas</button>
             <button className={`btn ${tab === 'tags' ? '' : 'opacity-muted'}`} onClick={() => { setTab('tags'); setSelectedTagId(null); }}>Tags</button>
           </div>
-          {tab === 'library' && (
-            <div className="row">
+          <div className="row gap-sm">
+            <input
+              className="input"
+              style={{ minWidth: 200 }}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && searchQuery.trim()) setTab('search'); }}
+              placeholder="🔍 Buscar (Enter)"
+            />
+            {tab === 'library' && (
               <select className="input" value={kind} onChange={e => { setPage(1); setKind(e.target.value); }}>
                 <option value="">All</option>
                 <option value="video">Video</option>
@@ -153,10 +163,8 @@ export default function App() {
                 <option value="photo">Photo</option>
                 <option value="other">Other</option>
               </select>
-              <input className="input" value={q} onChange={e => { setPage(1); setQ(e.target.value); }} placeholder="Buscar (path)" />
-              <button className="btn" onClick={async () => { if (!libId) return; await scanLibrary(libId); alert('Scan finished'); }}>Scan</button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -198,6 +206,14 @@ export default function App() {
         <FolderBrowser libraryId={libId!} path={folderPath} setPath={setFolderPath} onOpen={(item) => { recordView(item.id); setOpen(item); }} favorites={favorites} setFavorites={setFavorites} />
       ) : tab === 'tags' ? (
         <TagsView selectedTagId={selectedTagId} setSelectedTagId={setSelectedTagId} onOpen={(item) => { recordView(item.id); setOpen(item); }} favorites={favorites} setFavorites={setFavorites} />
+      ) : tab === 'search' ? (
+        <>
+          <div className="mb-md">
+            <button className="btn opacity-muted" onClick={() => setTab('home')}>← Volver</button>
+            <span className="muted" style={{ marginLeft: 24 }}>Resultados para: "{searchQuery}"</span>
+          </div>
+          <SearchView query={searchQuery} libraryId={libId} onOpen={(item) => { recordView(item.id); setOpen(item); }} favorites={favorites} setFavorites={setFavorites} />
+        </>
       ) : (
         <UsersView />
       )}
