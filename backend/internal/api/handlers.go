@@ -650,43 +650,55 @@ func (s *Server) handleFolders(w http.ResponseWriter, r *http.Request) {
 			items = append(items, it)
 		}
 	} else {
-		// In a subfolder: get subfolders and items
+		// In a subfolder: get subfolders and items using LIKE pattern
 		prefix := path + "/"
-		prefixLen := len(prefix)
+		likePattern := prefix + "%"
 
-		// Get unique subfolders at this level
-		// Find items that start with prefix and have another '/' after the prefix
+		// Get unique rel_paths that match and extract subfolder names in Go
 		folderRows, err := s.DB.Query(r.Context(), `
-			SELECT DISTINCT split_part(substring(rel_path from $2), '/', 1) as folder
+			SELECT DISTINCT rel_path
 			FROM media_item
-			WHERE library_id = $1 AND present = true 
-			  AND rel_path LIKE $3
-			  AND substring(rel_path from $2) LIKE '%/%'
-			ORDER BY folder ASC
-			LIMIT 1000
-		`, lid, prefixLen+1, prefix+"%")
+			WHERE library_id = $1 AND present = true AND rel_path LIKE $2
+			ORDER BY rel_path ASC
+		`, lid, likePattern)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+		folderSet := make(map[string]bool)
 		for folderRows.Next() {
-			var folder string
-			if err := folderRows.Scan(&folder); err == nil && folder != "" {
-				folders = append(folders, folder)
+			var relPath string
+			if err := folderRows.Scan(&relPath); err == nil {
+				rest := strings.TrimPrefix(relPath, prefix)
+				if strings.Contains(rest, "/") {
+					// Has subfolder - extract first part
+					parts := strings.SplitN(rest, "/", 2)
+					folderSet[parts[0]] = true
+				}
 			}
 		}
 		folderRows.Close()
 
-		// Get items directly in this folder (start with prefix, no more '/' after prefix)
+		// Convert to sorted slice
+		for f := range folderSet {
+			folders = append(folders, f)
+		}
+		// Sort folders alphabetically
+		for i := 0; i < len(folders); i++ {
+			for j := i + 1; j < len(folders); j++ {
+				if folders[i] > folders[j] {
+					folders[i], folders[j] = folders[j], folders[i]
+				}
+			}
+		}
+
+		// Get items directly in this folder (no further '/' after prefix)
 		itemRows, err := s.DB.Query(r.Context(), `
 			SELECT id, library_id, rel_path, path, kind, present, size_bytes, mtime, last_seen_at, coalesce(thumb_path,'')
 			FROM media_item
-			WHERE library_id = $1 AND present = true 
-			  AND rel_path LIKE $2
-			  AND substring(rel_path from $3) NOT LIKE '%/%'
+			WHERE library_id = $1 AND present = true AND rel_path LIKE $2
 			ORDER BY rel_path ASC
-			LIMIT 500
-		`, lid, prefix+"%", prefixLen+1)
+		`, lid, likePattern)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -699,11 +711,19 @@ func (s *Server) handleFolders(w http.ResponseWriter, r *http.Request) {
 			if err := itemRows.Scan(&it.ID, &it.LibraryID, &it.RelPath, &it.Path, &it.Kind, &it.Present, &it.SizeBytes, &mtime, &it.LastSeenAt, &thumb); err != nil {
 				continue
 			}
+			// Only include if this is a direct child (no more '/')
+			rest := strings.TrimPrefix(it.RelPath, prefix)
+			if strings.Contains(rest, "/") {
+				continue // Skip - this is in a subfolder
+			}
 			it.MTime = mtime
 			if thumb != "" {
 				it.ThumbURL = fmt.Sprintf("/api/items/%d/thumb", it.ID)
 			}
 			items = append(items, it)
+			if len(items) >= 500 {
+				break
+			}
 		}
 	}
 
