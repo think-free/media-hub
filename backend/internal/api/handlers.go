@@ -77,6 +77,9 @@ func (s *Server) Routes() http.Handler {
 	// Search - returns items by filename regex and matching tags
 	r.Get("/api/search", s.handleSearch)
 
+	// Jellyfin import
+	r.Post("/api/libraries/{id}/import/jellyfin", s.handleJellyfinImport)
+
 	return r
 }
 

@@ -254,3 +254,41 @@ export async function regenerateThumbs(libraryId: number, videoOnly = false): Pr
   const res = await apiFetch(url, { method: "POST" });
   return res.json();
 }
+
+// Jellyfin import
+export type JellyfinImportOptions = {
+  import_collections: boolean;
+  import_favorites: boolean;
+};
+
+export type JellyfinImportResult = {
+  collections_imported: number;
+  favorites_imported: number;
+  items_matched: number;
+  items_not_found: number;
+  errors?: string[];
+};
+
+export async function importJellyfin(
+  libraryId: number,
+  file: File,
+  options: JellyfinImportOptions
+): Promise<JellyfinImportResult> {
+  const token = localStorage.getItem("mh_token");
+  const formData = new FormData();
+  formData.append("database", file);
+  formData.append("options", JSON.stringify(options));
+
+  const res = await fetch(`${API}/api/libraries/${libraryId}/import/jellyfin`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || `HTTP ${res.status}`);
+  }
+
+  return res.json() as Promise<JellyfinImportResult>;
+}

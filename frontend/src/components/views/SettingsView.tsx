@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { getLibraryStats, regenerateThumbs, scanLibrary, type LibraryStats } from '../../api';
+import { useState, useEffect, useRef } from 'react';
+import { getLibraryStats, regenerateThumbs, scanLibrary, importJellyfin, type LibraryStats, type JellyfinImportResult } from '../../api';
 import { bytes } from '../../utils/format';
 
 interface SettingsViewProps {
@@ -12,6 +12,13 @@ export function SettingsView({ libraryId, onClose }: SettingsViewProps) {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
+
+    // Jellyfin import state
+    const [jellyfinFile, setJellyfinFile] = useState<File | null>(null);
+    const [importCollections, setImportCollections] = useState(true);
+    const [importFavorites, setImportFavorites] = useState(true);
+    const [importResult, setImportResult] = useState<JellyfinImportResult | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!libraryId) return;
@@ -51,6 +58,33 @@ export function SettingsView({ libraryId, onClose }: SettingsViewProps) {
         setActionLoading(null);
     };
 
+    const handleJellyfinImport = async () => {
+        if (!libraryId || !jellyfinFile) return;
+        if (!importCollections && !importFavorites) {
+            setMessage('Selecciona al menos una opción para importar');
+            return;
+        }
+
+        setActionLoading('jellyfin');
+        setMessage(null);
+        setImportResult(null);
+
+        try {
+            const result = await importJellyfin(libraryId, jellyfinFile, {
+                import_collections: importCollections,
+                import_favorites: importFavorites,
+            });
+            setImportResult(result);
+            setJellyfinFile(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        } catch (e) {
+            setMessage(`Error al importar: ${e instanceof Error ? e.message : 'Error desconocido'}`);
+        }
+        setActionLoading(null);
+    };
+
     if (!libraryId) {
         return (
             <div className="settings-view">
@@ -63,7 +97,6 @@ export function SettingsView({ libraryId, onClose }: SettingsViewProps) {
         <div className="settings-view">
             <div className="settings-header">
                 <h2>Configuración de Biblioteca</h2>
-                <button className="btn" onClick={onClose}>✕</button>
             </div>
 
             {loading ? (
@@ -162,6 +195,97 @@ export function SettingsView({ libraryId, onClose }: SettingsViewProps) {
                                 {actionLoading === 'thumbs-all' ? 'Iniciando...' : 'Regenerar Todas las Miniaturas'}
                             </button>
                         </div>
+                    </div>
+
+                    {/* Jellyfin Import */}
+                    <div className="glass settings-section">
+                        <h3>Importar desde Jellyfin</h3>
+                        <p className="section-description">
+                            Importa colecciones (como tags) y favoritos desde tu base de datos de Jellyfin.
+                        </p>
+
+                        <div className="jellyfin-import">
+                            <div className="file-input-wrapper">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".db"
+                                    onChange={(e) => setJellyfinFile(e.target.files?.[0] || null)}
+                                    disabled={actionLoading !== null}
+                                    id="jellyfin-file"
+                                />
+                                <label htmlFor="jellyfin-file" className="file-input-label">
+                                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='17 8 12 3 7 8'/%3E%3Cline x1='12' y1='3' x2='12' y2='15'/%3E%3C/svg%3E" alt="" />
+                                    {jellyfinFile ? jellyfinFile.name : 'Seleccionar library.db'}
+                                </label>
+                            </div>
+
+                            <div className="import-options">
+                                <label className="checkbox-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={importCollections}
+                                        onChange={(e) => setImportCollections(e.target.checked)}
+                                        disabled={actionLoading !== null}
+                                    />
+                                    Colecciones → Tags
+                                </label>
+                                <label className="checkbox-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={importFavorites}
+                                        onChange={(e) => setImportFavorites(e.target.checked)}
+                                        disabled={actionLoading !== null}
+                                    />
+                                    Favoritos
+                                </label>
+                            </div>
+
+                            <button
+                                className="btn btn-action btn-jellyfin"
+                                onClick={handleJellyfinImport}
+                                disabled={actionLoading !== null || !jellyfinFile}
+                            >
+                                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M12 3v12'/%3E%3Cpath d='m8 11 4 4 4-4'/%3E%3Cpath d='M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4'/%3E%3C/svg%3E" alt="" style={{ marginRight: '10px' }} />
+                                {actionLoading === 'jellyfin' ? 'Importando...' : 'Importar'}
+                            </button>
+                        </div>
+
+                        {/* Import Result */}
+                        {importResult && (
+                            <div className="import-result">
+                                <div className="import-result-grid">
+                                    <div className="import-stat">
+                                        <span className="import-stat-value">{importResult.collections_imported}</span>
+                                        <span className="import-stat-label">Colecciones importadas</span>
+                                    </div>
+                                    <div className="import-stat">
+                                        <span className="import-stat-value">{importResult.favorites_imported}</span>
+                                        <span className="import-stat-label">Favoritos importados</span>
+                                    </div>
+                                    <div className="import-stat">
+                                        <span className="import-stat-value">{importResult.items_matched}</span>
+                                        <span className="import-stat-label">Items encontrados</span>
+                                    </div>
+                                    <div className="import-stat">
+                                        <span className="import-stat-value" style={{ color: importResult.items_not_found > 0 ? '#f59e0b' : 'inherit' }}>
+                                            {importResult.items_not_found}
+                                        </span>
+                                        <span className="import-stat-label">Items no encontrados</span>
+                                    </div>
+                                </div>
+                                {importResult.errors && importResult.errors.length > 0 && (
+                                    <div className="import-errors">
+                                        <strong>Errores:</strong>
+                                        <ul>
+                                            {importResult.errors.map((err, i) => (
+                                                <li key={i}>{err}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {message && (
