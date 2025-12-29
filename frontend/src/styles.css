@@ -182,6 +182,11 @@ a {
   padding: 14px 24px;
   font-size: 22px;
   cursor: pointer;
+  height: 56px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn:hover {
@@ -203,6 +208,8 @@ a {
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: stretch;
   gap: 24px;
 }
 
@@ -214,13 +221,14 @@ a {
 
 .thumb {
   width: 100%;
-  aspect-ratio: 16/9;
   background: rgba(255, 255, 255, 0.06);
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   display: grid;
   place-items: center;
   margin-bottom: 10px;
+  overflow: hidden;
+  flex-grow: 1;
 }
 
 .title {
@@ -602,5 +610,92 @@ a {
   h3 {
     font-size: 18px !important;
     margin-bottom: 10px !important;
+  }
+}
+
+/* Settings View */
+.settings-view {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.settings-section {
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.settings-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.stats-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.stats-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-action {
+  width: 100%;
+  text-align: left;
+  padding: 16px 20px;
+  font-size: 16px;
+}
+
+.settings-message {
+  padding: 16px;
+  text-align: center;
+  color: #10b981;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .stats-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

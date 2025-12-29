@@ -40,6 +40,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/api/libraries", s.handleLibraries)
 	r.Post("/api/libraries", s.handleCreateLibrary)
 	r.Delete("/api/libraries/{id}", s.handleDeleteLibrary)
+	r.Get("/api/libraries/{id}/stats", s.handleLibraryStats)
+	r.Post("/api/libraries/{id}/regenerate-thumbs", s.handleRegenerateThumbs)
 	r.Post("/api/scan", s.handleScan)
 
 	r.Get("/api/items", s.handleItems)
@@ -1217,4 +1219,147 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, 200, result)
+}
+
+// handleLibraryStats returns statistics about a library
+func (s *Server) handleLibraryStats(w http.ResponseWriter, r *http.Request) {
+	lid, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if lid <= 0 {
+		http.Error(w, "invalid library id", 400)
+		return
+	}
+
+	type LibraryStats struct {
+		ID            int64  `json:"id"`
+		Name          string `json:"name"`
+		Path          string `json:"path"`
+		TotalItems    int    `json:"total_items"`
+		VideoCount    int    `json:"video_count"`
+		PhotoCount    int    `json:"photo_count"`
+		AudioCount    int    `json:"audio_count"`
+		OtherCount    int    `json:"other_count"`
+		TotalSize     int64  `json:"total_size"`
+		ThumbCount    int    `json:"thumb_count"`
+		MissingThumbs int    `json:"missing_thumbs"`
+	}
+
+	var stats LibraryStats
+	stats.ID = lid
+
+	// Get library info - roots is an array, get first one for display
+	var roots []string
+	err := s.DB.QueryRow(r.Context(), "SELECT name, roots FROM library WHERE id = $1", lid).Scan(&stats.Name, &roots)
+	if err != nil {
+		http.Error(w, "library not found", 404)
+		return
+	}
+	if len(roots) > 0 {
+		stats.Path = roots[0]
+	}
+
+	// Get counts by kind
+	rows, err := s.DB.Query(r.Context(), `
+		SELECT kind, COUNT(*), COALESCE(SUM(size_bytes), 0)
+		FROM media_item
+		WHERE library_id = $1 AND present = true
+		GROUP BY kind
+	`, lid)
+	if err != nil {
+		http.Error(w, "query error", 500)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var kind string
+		var count int
+		var size int64
+		if err := rows.Scan(&kind, &count, &size); err != nil {
+			continue
+		}
+		stats.TotalItems += count
+		stats.TotalSize += size
+		switch kind {
+		case "video":
+			stats.VideoCount = count
+		case "photo":
+			stats.PhotoCount = count
+		case "audio":
+			stats.AudioCount = count
+		default:
+			stats.OtherCount += count
+		}
+	}
+
+	// Get thumb counts
+	err = s.DB.QueryRow(r.Context(), `
+		SELECT 
+			COUNT(*) FILTER (WHERE thumb_path IS NOT NULL AND thumb_path != ''),
+			COUNT(*) FILTER (WHERE thumb_path IS NULL OR thumb_path = '')
+		FROM media_item
+		WHERE library_id = $1 AND present = true AND kind IN ('video', 'photo')
+	`, lid).Scan(&stats.ThumbCount, &stats.MissingThumbs)
+	if err != nil {
+		stats.ThumbCount = 0
+		stats.MissingThumbs = 0
+	}
+
+	writeJSON(w, 200, stats)
+}
+
+// handleRegenerateThumbs triggers thumbnail regeneration for a library
+func (s *Server) handleRegenerateThumbs(w http.ResponseWriter, r *http.Request) {
+	lid, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if lid <= 0 {
+		http.Error(w, "invalid library id", 400)
+		return
+	}
+
+	// Check if we should only regenerate videos
+	videoOnly := r.URL.Query().Get("video_only") == "true"
+
+	// Clear existing thumb_path and create new thumb jobs
+	kindFilter := ""
+	if videoOnly {
+		kindFilter = "AND kind = 'video'"
+	} else {
+		kindFilter = "AND kind IN ('video', 'photo')"
+	}
+
+	// Update media items to clear thumb_path
+	_, err := s.DB.Exec(r.Context(), fmt.Sprintf(`
+		UPDATE media_item 
+		SET thumb_path = NULL 
+		WHERE library_id = $1 AND present = true %s
+	`, kindFilter), lid)
+	if err != nil {
+		http.Error(w, "failed to clear thumbs", 500)
+		return
+	}
+
+	// Create thumb jobs for items
+	_, err = s.DB.Exec(r.Context(), fmt.Sprintf(`
+		INSERT INTO job (kind, item_id, run_at, attempts)
+		SELECT 'thumb', id, NOW(), 0
+		FROM media_item
+		WHERE library_id = $1 AND present = true %s
+		ON CONFLICT DO NOTHING
+	`, kindFilter), lid)
+	if err != nil {
+		http.Error(w, "failed to create jobs", 500)
+		return
+	}
+
+	// Get count of jobs created
+	var jobCount int
+	s.DB.QueryRow(r.Context(), `
+		SELECT COUNT(*) FROM job 
+		WHERE kind = 'thumb' AND locked_at IS NULL
+	`).Scan(&jobCount)
+
+	writeJSON(w, 200, map[string]any{
+		"success":     true,
+		"jobs_queued": jobCount,
+		"video_only":  videoOnly,
+	})
 }

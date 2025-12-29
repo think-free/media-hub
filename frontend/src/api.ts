@@ -228,3 +228,29 @@ export async function search(q: string, libraryId?: number): Promise<SearchResul
   const res = await apiFetch(`/api/search?${params.toString()}`);
   return res.json() as Promise<SearchResult>;
 }
+
+// Library stats
+export type LibraryStats = {
+  id: number;
+  name: string;
+  path: string;
+  total_items: number;
+  video_count: number;
+  photo_count: number;
+  audio_count: number;
+  other_count: number;
+  total_size: number;
+  thumb_count: number;
+  missing_thumbs: number;
+};
+
+export async function getLibraryStats(libraryId: number): Promise<LibraryStats> {
+  const res = await apiFetch(`/api/libraries/${libraryId}/stats`);
+  return res.json() as Promise<LibraryStats>;
+}
+
+export async function regenerateThumbs(libraryId: number, videoOnly = false): Promise<{ success: boolean; jobs_queued: number }> {
+  const url = `/api/libraries/${libraryId}/regenerate-thumbs${videoOnly ? '?video_only=true' : ''}`;
+  const res = await apiFetch(url, { method: "POST" });
+  return res.json();
+}

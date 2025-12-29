@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getFavorites, getItems, getLibraries, getCurrentUser, login, logout, recordView, scanLibrary, setFavorite, unsetFavorite, type MediaItem } from './api';
+import { getFavorites, getItems, getLibraries, getCurrentUser, login, logout, recordView, setFavorite, unsetFavorite, type MediaItem } from './api';
 
 // Components
 import { Card } from './components/common';
 import { PlayerModal, LibraryModal, ChangePasswordModal } from './components/modals';
 import { HomeView, FavoritesView, TagsView, FolderBrowser, UsersView, SearchView } from './components/views';
+import { SettingsView } from './components/views/SettingsView';
 
 function Login({ onDone }: { onDone: () => void }) {
   const [u, setU] = useState('admin');
@@ -42,7 +43,7 @@ export default function App() {
   const [total, setTotal] = useState<number>(0);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [open, setOpen] = useState<MediaItem | null>(null);
-  const [tab, setTab] = useState<'home' | 'library' | 'favorites' | 'folders' | 'tags' | 'search' | 'users'>('home');
+  const [tab, setTab] = useState<'home' | 'library' | 'favorites' | 'folders' | 'tags' | 'search' | 'users' | 'settings'>('home');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [folderPath, setFolderPath] = useState<string>('');
@@ -123,15 +124,24 @@ export default function App() {
               {libs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
             <button className="btn" onClick={() => setShowLibraryModal(true)} title="Nueva biblioteca">+</button>
-            <button className="btn" onClick={async () => { if (!libId) return; await scanLibrary(libId); alert('Scan iniciado en segundo plano'); }} title="Escanear biblioteca">🔃</button>
+            <button className="btn" onClick={() => setTab('settings')} title="Configuración de biblioteca">
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z'/%3E%3C/svg%3E" alt="Settings" />
+            </button>
           </div>
           {/* Separator */}
           <div className="topbar-separator" style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.2)', margin: '0 8px' }}></div>
           {/* User section */}
           <div className="row gap-sm user-section">
-            <span style={{ opacity: 0.7 }}>👤 {currentUsername}</span>
-            <button className="btn opacity-muted" onClick={() => setShowPasswordModal(true)} title="Cambiar contraseña">🔑</button>
-            <button className="btn opacity-muted" onClick={() => setTab('users')} title="Usuarios">👥</button>
+            <span style={{ opacity: 0.9, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E" alt="User" />
+              {currentUsername}
+            </span>
+            <button className="btn" onClick={() => setShowPasswordModal(true)} title="Cambiar contraseña" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Crect x='3' y='11' width='18' height='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E" alt="Password" />
+            </button>
+            <button className="btn" onClick={() => setTab('users')} title="Usuarios" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M23 21v-2a4 4 0 0 0-3-3.87'/%3E%3Cpath d='M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E" alt="Users" />
+            </button>
             <button className="btn" onClick={() => { logout(); setAuthed(false); }}>Logout</button>
           </div>
         </div>
@@ -214,6 +224,8 @@ export default function App() {
           </div>
           <SearchView query={searchQuery} libraryId={libId} onOpen={(item) => { recordView(item.id); setOpen(item); }} favorites={favorites} setFavorites={setFavorites} />
         </>
+      ) : tab === 'settings' ? (
+        <SettingsView libraryId={libId ?? null} onClose={() => setTab('home')} />
       ) : (
         <UsersView />
       )}

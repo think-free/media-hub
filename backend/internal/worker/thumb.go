@@ -146,11 +146,29 @@ func (w *ThumbWorker) generatePhotoThumb(src, dst string) error {
 }
 
 func (w *ThumbWorker) generateVideoThumb(src, dst string) error {
-	// Use ffmpeg to extract frame at 1 second
+	// First, get video duration using ffprobe
+	duration := w.getVideoDuration(src)
+
+	// Calculate seek time: 10% of duration, min 5s, max 120s
+	seekTime := duration * 0.10
+	if seekTime < 5 {
+		seekTime = 5
+	}
+	if seekTime > 120 {
+		seekTime = 120
+	}
+	// If video is shorter than seek time, use 25% of duration
+	if seekTime > duration {
+		seekTime = duration * 0.25
+	}
+
+	seekStr := fmt.Sprintf("%.2f", seekTime)
+
+	// Use ffmpeg to extract frame
 	cmd := exec.Command("ffmpeg",
-		"-y", // overwrite
+		"-y",           // overwrite
+		"-ss", seekStr, // seek to calculated time
 		"-i", src,
-		"-ss", "00:00:01", // seek to 1 second
 		"-vframes", "1", // extract 1 frame
 		"-vf", "scale=320:-1", // 320px wide
 		"-q:v", "5", // quality
@@ -161,4 +179,25 @@ func (w *ThumbWorker) generateVideoThumb(src, dst string) error {
 		return fmt.Errorf("ffmpeg failed: %v, output: %s", err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+// getVideoDuration returns video duration in seconds using ffprobe
+func (w *ThumbWorker) getVideoDuration(src string) float64 {
+	cmd := exec.Command("ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		src,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return 30 // default to 30 seconds if can't get duration
+	}
+
+	var duration float64
+	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%f", &duration)
+	if err != nil {
+		return 30
+	}
+	return duration
 }
