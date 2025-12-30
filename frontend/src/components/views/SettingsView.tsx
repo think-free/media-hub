@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getLibraryStats, regenerateThumbs, scanLibrary, importJellyfin, type LibraryStats, type JellyfinImportResult } from '../../api';
 import { bytes } from '../../utils/format';
 
@@ -12,6 +12,7 @@ export function SettingsView({ libraryId, onClose }: SettingsViewProps) {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
+    const [isPolling, setIsPolling] = useState(false);
 
     // Jellyfin import state
     const [jellyfinFile, setJellyfinFile] = useState<File | null>(null);
@@ -19,15 +20,90 @@ export function SettingsView({ libraryId, onClose }: SettingsViewProps) {
     const [importFavorites, setImportFavorites] = useState(true);
     const [importResult, setImportResult] = useState<JellyfinImportResult | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const pollingRef = useRef<number | null>(null);
 
+    // Refresh stats function
+    const refreshStats = useCallback(async () => {
+        if (!libraryId) return null;
+        try {
+            const newStats = await getLibraryStats(libraryId);
+            setStats(newStats);
+            return newStats;
+        } catch (e) {
+            console.error('Error refreshing stats:', e);
+            return null;
+        }
+    }, [libraryId]);
+
+    // Initial load - start polling to detect any work in progress
     useEffect(() => {
         if (!libraryId) return;
         setLoading(true);
         getLibraryStats(libraryId)
-            .then(setStats)
+            .then((stats) => {
+                setStats(stats);
+                // Start polling to detect if there's work in progress
+                setIsPolling(true);
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [libraryId]);
+
+    // Polling effect - refresh stats every 5 seconds while active
+    const prevStatsRef = useRef<string | null>(null);
+    const stableCountRef = useRef(0);
+    const hasDetectedChanges = useRef(false);
+
+    useEffect(() => {
+        if (!isPolling || !libraryId) return;
+
+        const poll = async () => {
+            const newStats = await refreshStats();
+            if (newStats) {
+                const statsKey = JSON.stringify({
+                    total: newStats.total_items,
+                    thumbs: newStats.thumb_count,
+                    missing: newStats.missing_thumbs
+                });
+
+                if (prevStatsRef.current === statsKey) {
+                    stableCountRef.current++;
+                    // Stop polling after 2 stable cycles (10 seconds of no changes)
+                    if (stableCountRef.current >= 2) {
+                        setIsPolling(false);
+                        // Only show message if we detected changes during polling
+                        if (hasDetectedChanges.current) {
+                            if (newStats.missing_thumbs === 0) {
+                                setMessage('¡Actualización completada!');
+                            } else {
+                                setMessage(`Actualización pausada. Pendientes: ${newStats.missing_thumbs} miniaturas`);
+                            }
+                        }
+                        // Reset refs
+                        stableCountRef.current = 0;
+                        prevStatsRef.current = null;
+                        hasDetectedChanges.current = false;
+                    }
+                } else {
+                    // Stats changed - work is in progress
+                    if (prevStatsRef.current !== null) {
+                        hasDetectedChanges.current = true;
+                    }
+                    stableCountRef.current = 0;
+                    prevStatsRef.current = statsKey;
+                }
+            }
+        };
+
+        pollingRef.current = window.setInterval(poll, 5000);
+
+        return () => {
+            if (pollingRef.current) {
+                clearInterval(pollingRef.current);
+                pollingRef.current = null;
+            }
+        };
+    }, [isPolling, libraryId, refreshStats]);
 
     const handleScan = async () => {
         if (!libraryId) return;
@@ -35,7 +111,9 @@ export function SettingsView({ libraryId, onClose }: SettingsViewProps) {
         setMessage(null);
         try {
             await scanLibrary(libraryId);
-            setMessage('Escaneo iniciado en segundo plano');
+            setMessage('Escaneo iniciado en segundo plano (actualizando cada 5s...)');
+            // Start polling to show progress
+            setIsPolling(true);
         } catch (e) {
             setMessage('Error al iniciar escaneo');
         }
@@ -48,10 +126,10 @@ export function SettingsView({ libraryId, onClose }: SettingsViewProps) {
         setMessage(null);
         try {
             const result = await regenerateThumbs(libraryId, videoOnly);
-            setMessage(`Regeneración iniciada: ${result.jobs_queued} trabajos en cola`);
-            // Refresh stats
-            const newStats = await getLibraryStats(libraryId);
-            setStats(newStats);
+            setMessage(`Regeneración iniciada: ${result.jobs_queued} trabajos en cola (actualizando cada 5s...)`);
+            // Refresh stats immediately and start polling
+            await refreshStats();
+            setIsPolling(true);
         } catch (e) {
             setMessage('Error al iniciar regeneración');
         }

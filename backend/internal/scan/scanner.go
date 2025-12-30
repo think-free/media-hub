@@ -85,8 +85,9 @@ func (s *Scanner) ScanLibrary(ctx context.Context, libraryID int64) error {
 
 			// Upsert, update if changed
 			// If size/mtime changed, schedule jobs (metadata/thumb).
+			// xmax = 0 means INSERT (new), xmax <> 0 means UPDATE (existing)
 			var itemID int64
-			var changed bool
+			var isUpdate bool
 			err = s.DB.QueryRow(ctx, `
 				insert into media_item(library_id, path, rel_path, kind, present, size_bytes, mtime, last_seen_at, updated_at)
 				values ($1,$2,$3,$4,true,$5,$6,$7,$7)
@@ -100,14 +101,19 @@ func (s *Scanner) ScanLibrary(ctx context.Context, libraryID int64) error {
 					updated_at=excluded.updated_at,
 					size_bytes=excluded.size_bytes,
 					mtime=excluded.mtime
-				returning id, (xmax <> 0) as changed
-			`, libraryID, path, rel, kind, size, mtime, startedAt).Scan(&itemID, &changed)
+				returning id, (xmax <> 0) as is_update
+			`, libraryID, path, rel, kind, size, mtime, startedAt).Scan(&itemID, &isUpdate)
 			if err != nil {
 				return nil
 			}
 
-			if changed {
-				// enqueue jobs (best-effort)
+			// For new items (insert) or changed items (update with different content)
+			// Create thumb job for video and photo types
+			if !isUpdate && (kind == "video" || kind == "photo") {
+				// New item - create thumb job
+				_, _ = s.DB.Exec(ctx, "insert into job(kind,item_id,run_at,attempts) values ('thumb',$1,NOW(),0) on conflict do nothing", itemID)
+			} else if isUpdate {
+				// Existing item that was updated - enqueue jobs (best-effort)
 				_, _ = s.DB.Exec(ctx, "insert into job(kind,item_id) values ('metadata',$1) on conflict do nothing", itemID)
 				_, _ = s.DB.Exec(ctx, "insert into job(kind,item_id) values ('thumb',$1) on conflict do nothing", itemID)
 			}
