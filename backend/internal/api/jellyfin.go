@@ -353,13 +353,20 @@ func parseJellyfinCollections(db *sql.DB, allItems []jellyfinItem) ([]jellyfinCo
 
 // parseJellyfinUserData parses user data (favorites) from Jellyfin
 func parseJellyfinUserData(db *sql.DB) ([]jellyfinUserData, error) {
-	rows, err := db.Query(`
-		SELECT 
-			COALESCE(ItemId, ''),
-			COALESCE(IsFavorite, 0)
-		FROM UserDatas
-		WHERE IsFavorite = 1
-	`)
+	// Try different column name variations as Jellyfin schema may vary
+	queries := []string{
+		`SELECT COALESCE(key, ''), COALESCE(isFavorite, 0) FROM UserDatas WHERE isFavorite = 1`,
+		`SELECT COALESCE(ItemId, ''), COALESCE(IsFavorite, 0) FROM UserDatas WHERE IsFavorite = 1`,
+	}
+
+	var rows *sql.Rows
+	var err error
+	for _, query := range queries {
+		rows, err = db.Query(query)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
