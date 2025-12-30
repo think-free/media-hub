@@ -125,7 +125,7 @@ func (s *Server) handleJellyfinImport(w http.ResponseWriter, r *http.Request) {
 // processJellyfinImport processes the Jellyfin database and imports data
 func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID int64, dbPath string, options JellyfinImportOptions) (*JellyfinImportResult, error) {
 	// Open SQLite database
-	sqliteDB, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	sqliteDB, err := sql.Open("sqlite", dbPath+"?mode=ro")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open jellyfin database: %w", err)
 	}
