@@ -84,10 +84,65 @@ export default function App() {
   if (!authed) return <Login onDone={() => setAuthed(true)} />;
 
   const maxPage = Math.max(1, Math.ceil(total / pageSize));
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu when tab changes
+  const handleTabChange = (newTab: typeof tab) => {
+    setTab(newTab);
+    setMobileMenuOpen(false);
+  };
 
   return (
     <div className="container">
-      <div className="glass topbar" style={{ position: 'relative' }}>
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+          <div className="mobile-menu-sidebar glass" onClick={e => e.stopPropagation()}>
+            <div className="mobile-menu-header">
+              <img src="/logo.png" alt="MediaHub" className="mobile-menu-logo" />
+              <span>Media Hub</span>
+              <button className="btn mobile-menu-close" onClick={() => setMobileMenuOpen(false)}>✕</button>
+            </div>
+
+            <div className="mobile-menu-nav">
+              <button className={`mobile-menu-item ${tab === 'home' ? 'active' : ''}`} onClick={() => handleTabChange('home')}>🏠 Inicio</button>
+              <button className={`mobile-menu-item ${tab === 'library' ? 'active' : ''}`} onClick={() => handleTabChange('library')}>📚 Biblioteca</button>
+              <button className={`mobile-menu-item ${tab === 'favorites' ? 'active' : ''}`} onClick={() => handleTabChange('favorites')}>⭐ Favoritos</button>
+              <button className={`mobile-menu-item ${tab === 'folders' ? 'active' : ''}`} onClick={() => { handleTabChange('folders'); setFolderPath(''); }}>📁 Carpetas</button>
+              <button className={`mobile-menu-item ${tab === 'tags' ? 'active' : ''}`} onClick={() => { handleTabChange('tags'); setSelectedTagId(null); }}>🏷️ Tags</button>
+            </div>
+
+            <div className="mobile-menu-search">
+              <input
+                className="input"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && searchQuery.trim()) { handleTabChange('search'); } }}
+                placeholder="🔍 Buscar (Enter)"
+              />
+            </div>
+
+            <div className="mobile-menu-library">
+              <label className="mobile-menu-label">Biblioteca</label>
+              <div className="row gap-sm">
+                <select className="input flex-1" value={libId} onChange={e => { setPage(1); setLibId(Number(e.target.value)); }}>
+                  {libs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                <button className="btn" onClick={() => { setShowLibraryModal(true); setMobileMenuOpen(false); }}>+</button>
+                <button className="btn" onClick={() => { handleTabChange('settings'); }}>⚙️</button>
+              </div>
+            </div>
+
+            <div className="mobile-menu-user">
+              <span className="mobile-menu-username">👤 {currentUsername}</span>
+              <button className="btn" onClick={() => { logout(); setAuthed(false); }}>Logout</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Topbar - hidden on mobile */}
+      <div className="glass topbar desktop-only" style={{ position: 'relative' }}>
         <img
           src="/logo.png"
           alt="MediaHub"
@@ -141,7 +196,19 @@ export default function App() {
         </div>
       </div>
 
-      <div className="glass toolbar">
+      {/* Mobile Topbar - visible only on mobile */}
+      <div className="glass topbar mobile-topbar mobile-only">
+        <div className="mobile-topbar-center">
+          <img src="/logo.png" alt="MediaHub" className="mobile-logo" />
+          <span className="mobile-title">Media Hub</span>
+        </div>
+        <button className="btn hamburger-btn" onClick={() => setMobileMenuOpen(true)}>
+          ☰
+        </button>
+      </div>
+
+      {/* Desktop Toolbar - hidden on mobile */}
+      <div className="glass toolbar desktop-only">
         <div className="row justify-between">
           <div className="row">
             <button className={`btn ${tab === 'home' ? '' : 'opacity-muted'}`} onClick={() => setTab('home')}>🏠 Inicio</button>
