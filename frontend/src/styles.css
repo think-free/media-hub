@@ -502,6 +502,18 @@ label img {
   font-size: 14px;
 }
 
+.mobile-menu-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-menu-filter .input {
+  width: 100%;
+  height: 40px;
+  font-size: 14px;
+}
+
 .mobile-menu-library {
   display: flex;
   flex-direction: column;

@@ -122,6 +122,20 @@ export default function App() {
               />
             </div>
 
+            {/* Filter - visible when in library tab */}
+            {tab === 'library' && (
+              <div className="mobile-menu-filter">
+                <label className="mobile-menu-label">Filtrar por tipo</label>
+                <select className="input" value={kind} onChange={e => { setPage(1); setKind(e.target.value); }}>
+                  <option value="">Todos</option>
+                  <option value="video">Video</option>
+                  <option value="audio">Audio</option>
+                  <option value="photo">Foto</option>
+                  <option value="other">Otro</option>
+                </select>
+              </div>
+            )}
+
             <div className="mobile-menu-library">
               <label className="mobile-menu-label">Biblioteca</label>
               <div className="row gap-sm">
