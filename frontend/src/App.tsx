@@ -3,8 +3,8 @@ import { getFavorites, getItems, getLibraries, getCurrentUser, login, logout, re
 
 // Components
 import { Card } from './components/common';
-import { PlayerModal, LibraryModal, ChangePasswordModal } from './components/modals';
-import { HomeView, FavoritesView, TagsView, FolderBrowser, UsersView, SearchView } from './components/views';
+import { PlayerModal, LibraryModal } from './components/modals';
+import { HomeView, FavoritesView, TagsView, FolderBrowser, SearchView } from './components/views';
 import { SettingsView } from './components/views/SettingsView';
 
 function Login({ onDone }: { onDone: () => void }) {
@@ -43,12 +43,12 @@ export default function App() {
   const [total, setTotal] = useState<number>(0);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [open, setOpen] = useState<MediaItem | null>(null);
-  const [tab, setTab] = useState<'home' | 'library' | 'favorites' | 'folders' | 'tags' | 'search' | 'users' | 'settings'>('home');
+  const [tab, setTab] = useState<'home' | 'library' | 'favorites' | 'folders' | 'tags' | 'search' | 'settings'>('home');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [folderPath, setFolderPath] = useState<string>('');
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+
   const [currentUsername, setCurrentUsername] = useState<string>('');
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
   const pageSize = 48;
@@ -136,12 +136,6 @@ export default function App() {
               <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E" alt="User" />
               {currentUsername}
             </span>
-            <button className="btn" onClick={() => setShowPasswordModal(true)} title="Cambiar contraseña" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Crect x='3' y='11' width='18' height='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E" alt="Password" />
-            </button>
-            <button className="btn" onClick={() => setTab('users')} title="Usuarios" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M23 21v-2a4 4 0 0 0-3-3.87'/%3E%3Cpath d='M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E" alt="Users" />
-            </button>
             <button className="btn" onClick={() => { logout(); setAuthed(false); }}>Logout</button>
           </div>
         </div>
@@ -226,9 +220,7 @@ export default function App() {
         </>
       ) : tab === 'settings' ? (
         <SettingsView libraryId={libId ?? null} onClose={() => setTab('home')} />
-      ) : (
-        <UsersView />
-      )}
+      ) : null}
 
       {open && (
         <PlayerModal
@@ -250,9 +242,7 @@ export default function App() {
           onCreated={() => { setShowLibraryModal(false); reloadLibraries(); }}
         />
       )}
-      {showPasswordModal && (
-        <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
-      )}
+
     </div>
   );
 }
