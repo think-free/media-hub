@@ -133,8 +133,10 @@ func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID in
 
 	result := &JellyfinImportResult{}
 
-	// Build a map of MediaHub items by path for matching
-	mediaHubItems := make(map[string]int64) // path -> item_id
+	// Build a map of MediaHub items by FILENAME for matching
+	// Since Jellyfin paths are from a different system, we match by filename only
+	mediaHubItemsByFilename := make(map[string]int64) // filename -> item_id
+	mediaHubItemsByPath := make(map[string]int64)     // normalized path -> item_id (fallback)
 	rows, err := s.DB.Query(ctx,
 		"SELECT id, path FROM media_item WHERE library_id = $1 AND present = true", libraryID)
 	if err != nil {
@@ -148,19 +150,33 @@ func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID in
 		if err := rows.Scan(&id, &path); err != nil {
 			continue
 		}
-		// Normalize path for matching
+		// Store by filename (primary matching method)
+		filename := filepath.Base(path)
+		normalizedFilename := strings.ToLower(filename)
+		mediaHubItemsByFilename[normalizedFilename] = id
+
+		// Also store by full path as fallback
 		normalizedPath := normalizePath(path)
-		mediaHubItems[normalizedPath] = id
+		mediaHubItemsByPath[normalizedPath] = id
 	}
 
-	if len(mediaHubItems) == 0 {
+	if len(mediaHubItemsByFilename) == 0 {
 		return nil, fmt.Errorf("no items found in library")
 	}
+	log.Printf("MediaHub: Found %d items in library %d", len(mediaHubItemsByFilename), libraryID)
 
 	// Parse Jellyfin items
 	jellyfinItems, err := parseJellyfinItems(sqliteDB)
 	if err != nil {
 		result.Errors = append(result.Errors, "Failed to parse items: "+err.Error())
+		log.Printf("Jellyfin: Failed to parse items: %v", err)
+	} else {
+		log.Printf("Jellyfin: Parsed %d items from database", len(jellyfinItems))
+		if len(jellyfinItems) > 0 && len(jellyfinItems) <= 5 {
+			for i, item := range jellyfinItems {
+				log.Printf("  Sample item %d: ID=%s, Path=%s, Name=%s", i+1, item.ID, item.Path, item.Name)
+			}
+		}
 	}
 
 	// Build Jellyfin ID -> item map
@@ -174,11 +190,14 @@ func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID in
 		collections, err := parseJellyfinCollections(sqliteDB, jellyfinItems)
 		if err != nil {
 			result.Errors = append(result.Errors, "Failed to parse collections: "+err.Error())
+			log.Printf("Jellyfin: Failed to parse collections: %v", err)
 		} else {
+			log.Printf("Jellyfin: Found %d collections", len(collections))
 			for _, coll := range collections {
 				if coll.Name == "" || len(coll.ItemIDs) == 0 {
 					continue
 				}
+				log.Printf("  Processing collection '%s' with %d items", coll.Name, len(coll.ItemIDs))
 
 				// Create tag for collection
 				var tagID int64
@@ -199,11 +218,13 @@ func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID in
 						continue
 					}
 
-					// Match to MediaHub item by path
-					normalizedPath := normalizePath(jItem.Path)
-					mediaHubID, found := mediaHubItems[normalizedPath]
+					// Match to MediaHub item by filename first, then full path
+					mediaHubID, found := matchJellyfinItemToMediaHub(jItem.Path, mediaHubItemsByFilename, mediaHubItemsByPath)
 					if !found {
 						result.ItemsNotFound++
+						if tagItemsAdded == 0 {
+							log.Printf("    Item not matched: %s (filename: %s)", jItem.Path, filepath.Base(jItem.Path))
+						}
 						continue
 					}
 
@@ -221,6 +242,8 @@ func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID in
 				if tagItemsAdded > 0 {
 					result.CollectionsImported++
 					log.Printf("Imported collection '%s' with %d items", coll.Name, tagItemsAdded)
+				} else {
+					log.Printf("  Collection '%s': No items matched", coll.Name)
 				}
 			}
 		}
@@ -231,8 +254,11 @@ func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID in
 		userDatas, err := parseJellyfinUserData(sqliteDB)
 		if err != nil {
 			result.Errors = append(result.Errors, "Failed to parse user data: "+err.Error())
+			log.Printf("Jellyfin: Failed to parse favorites: %v", err)
 		} else {
-			for _, ud := range userDatas {
+			log.Printf("Jellyfin: Found %d favorite items", len(userDatas))
+			favoritesAdded := 0
+			for i, ud := range userDatas {
 				if !ud.IsFavorite {
 					continue
 				}
@@ -240,14 +266,19 @@ func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID in
 				// Find the Jellyfin item
 				jItem := jellyfinIDToItem[ud.ItemID]
 				if jItem == nil || jItem.Path == "" {
+					if i < 3 {
+						log.Printf("  Favorite item %s: no Jellyfin item found or no path", ud.ItemID)
+					}
 					continue
 				}
 
-				// Match to MediaHub item by path
-				normalizedPath := normalizePath(jItem.Path)
-				mediaHubID, found := mediaHubItems[normalizedPath]
+				// Match to MediaHub item by filename first, then full path
+				mediaHubID, found := matchJellyfinItemToMediaHub(jItem.Path, mediaHubItemsByFilename, mediaHubItemsByPath)
 				if !found {
 					result.ItemsNotFound++
+					if favoritesAdded == 0 && i < 3 {
+						log.Printf("  Favorite not matched: %s (filename: %s)", jItem.Path, filepath.Base(jItem.Path))
+					}
 					continue
 				}
 
@@ -259,8 +290,10 @@ func (s *Server) processJellyfinImport(ctx context.Context, libraryID, userID in
 				if err == nil {
 					result.FavoritesImported++
 					result.ItemsMatched++
+					favoritesAdded++
 				}
 			}
+			log.Printf("Jellyfin: Imported %d favorites", favoritesAdded)
 		}
 	}
 
@@ -299,6 +332,13 @@ func parseJellyfinItems(db *sql.DB) ([]jellyfinItem, error) {
 
 // parseJellyfinCollections parses BoxSet collections from Jellyfin
 func parseJellyfinCollections(db *sql.DB, allItems []jellyfinItem) ([]jellyfinCollection, error) {
+	// Check if CollectionItems table exists
+	var hasCollectionItems bool
+	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='CollectionItems'").Scan(&hasCollectionItems)
+	if err != nil {
+		hasCollectionItems = false
+	}
+
 	// BoxSets are collection items in Jellyfin
 	rows, err := db.Query(`
 		SELECT 
@@ -329,19 +369,21 @@ func parseJellyfinCollections(db *sql.DB, allItems []jellyfinItem) ([]jellyfinCo
 		}
 
 		// Also try the CollectionItems table if it exists
-		itemRows, err := db.Query(`
-			SELECT COALESCE(ItemId, '')
-			FROM CollectionItems
-			WHERE CollectionId = ?
-		`, coll.ID)
-		if err == nil {
-			for itemRows.Next() {
-				var itemID string
-				if itemRows.Scan(&itemID) == nil && itemID != "" {
-					coll.ItemIDs = append(coll.ItemIDs, itemID)
+		if hasCollectionItems {
+			itemRows, err := db.Query(`
+				SELECT COALESCE(ItemId, '')
+				FROM CollectionItems
+				WHERE CollectionId = ?
+			`, coll.ID)
+			if err == nil {
+				for itemRows.Next() {
+					var itemID string
+					if itemRows.Scan(&itemID) == nil && itemID != "" {
+						coll.ItemIDs = append(coll.ItemIDs, itemID)
+					}
 				}
+				itemRows.Close()
 			}
-			itemRows.Close()
 		}
 
 		if len(coll.ItemIDs) > 0 {
@@ -385,6 +427,25 @@ func parseJellyfinUserData(db *sql.DB) ([]jellyfinUserData, error) {
 		}
 	}
 	return userData, nil
+}
+
+// matchJellyfinItemToMediaHub tries to match a Jellyfin item path to a MediaHub item
+// First tries by filename (case-insensitive), then falls back to full path matching
+func matchJellyfinItemToMediaHub(jellyfinPath string, byFilename, byPath map[string]int64) (int64, bool) {
+	// Try matching by filename first (this is the most reliable since paths may differ)
+	filename := filepath.Base(jellyfinPath)
+	normalizedFilename := strings.ToLower(filename)
+	if id, found := byFilename[normalizedFilename]; found {
+		return id, true
+	}
+
+	// Fallback: try full path matching
+	normalizedPath := normalizePath(jellyfinPath)
+	if id, found := byPath[normalizedPath]; found {
+		return id, true
+	}
+
+	return 0, false
 }
 
 // normalizePath normalizes file paths for comparison

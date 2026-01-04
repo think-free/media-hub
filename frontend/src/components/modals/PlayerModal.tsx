@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { addTagToItem, createTag, getItemTags, getTags, removeTagFromItem, streamUrl, type MediaItem, type Tag } from '../../api';
+import { bytes } from '../../utils/format';
 
 export interface PlayerModalProps {
     item: MediaItem;
@@ -14,6 +15,8 @@ export function PlayerModal({ item, onClose, onPrev, onNext }: PlayerModalProps)
     const [allTags, setAllTags] = useState<Tag[]>([]);
     const [selectedTagId, setSelectedTagId] = useState<string>('');
     const [newTagName, setNewTagName] = useState('');
+    const [videoDuration, setVideoDuration] = useState<number | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
 
     const loadTags = async () => {
         const [it, all] = await Promise.all([getItemTags(item.id), getTags()]);
@@ -23,6 +26,7 @@ export function PlayerModal({ item, onClose, onPrev, onNext }: PlayerModalProps)
 
     useEffect(() => {
         loadTags();
+        setVideoDuration(null); // Reset duration when item changes
     }, [item.id]);
 
     // Block body scroll when modal is open
@@ -33,6 +37,24 @@ export function PlayerModal({ item, onClose, onPrev, onNext }: PlayerModalProps)
             document.body.style.overflow = originalStyle;
         };
     }, []);
+
+    // Extract video duration when metadata loads
+    useEffect(() => {
+        if (!isPhoto && videoRef.current) {
+            const video = videoRef.current;
+            const handleMetadata = () => {
+                if (video.duration && isFinite(video.duration)) {
+                    setVideoDuration(video.duration);
+                }
+            };
+            video.addEventListener('loadedmetadata', handleMetadata);
+            // If already loaded
+            if (video.duration && isFinite(video.duration)) {
+                setVideoDuration(video.duration);
+            }
+            return () => video.removeEventListener('loadedmetadata', handleMetadata);
+        }
+    }, [isPhoto, item.id]);
 
     const handleAddTag = async () => {
         if (!selectedTagId) return;
@@ -75,6 +97,17 @@ export function PlayerModal({ item, onClose, onPrev, onNext }: PlayerModalProps)
         return () => window.removeEventListener('keydown', handleKey);
     }, [onPrev, onNext, onClose]);
 
+    // Format duration as HH:MM:SS or MM:SS
+    const formatDuration = (seconds: number): string => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        if (h > 0) {
+            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="glass modal-content" onClick={e => e.stopPropagation()}>
@@ -102,7 +135,7 @@ export function PlayerModal({ item, onClose, onPrev, onNext }: PlayerModalProps)
                     {isPhoto ? (
                         <img src={streamUrl(item.id)} className="media-display" style={{ width: '100%' }} />
                     ) : (
-                        <video src={streamUrl(item.id)} controls className="media-display" style={{ width: '100%' }} />
+                        <video ref={videoRef} src={streamUrl(item.id)} controls className="media-display" style={{ width: '100%' }} />
                     )}
                     {/* Right navigation zone */}
                     {onNext && (
@@ -121,6 +154,19 @@ export function PlayerModal({ item, onClose, onPrev, onNext }: PlayerModalProps)
                         </div>
                     )}
                 </div>
+
+                {/* File info section */}
+                <div className="mt-sm" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '14px' }}>
+                    <div className="muted">
+                        <strong>Tamaño:</strong> {bytes(item.size_bytes)}
+                    </div>
+                    {!isPhoto && videoDuration !== null && (
+                        <div className="muted">
+                            <strong>Duración:</strong> {formatDuration(videoDuration)}
+                        </div>
+                    )}
+                </div>
+
                 <p className="muted mt-sm mb-0">{item.rel_path}</p>
 
                 {/* Tags section */}
